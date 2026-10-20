@@ -4,7 +4,9 @@
 BUILD_DIR := build/Debug
 ELF := $(BUILD_DIR)/stm32f446-nucleo-soes.elf
 BIN := $(BUILD_DIR)/stm32f446-nucleo-soes.bin
+DEPLOY_HOST ?= embedded@rpi4
 ECAT_FIRMWARE_DIR ?= $(HOME)/.ecat_master/firmware
+REMOTE_FIRMWARE_DIR ?= /home/embedded/.ecat_master/firmware
 
 # Default target
 .PHONY: all
@@ -23,11 +25,18 @@ build: configure
 bin: build
 	@test -f "$(BIN)"
 
-# Copy the generated firmware to the local EtherCAT master installation.
+# Copy the application to the local EtherCAT master firmware directory.
 .PHONY: deploy
 deploy: bin
 	mkdir -p "$(ECAT_FIRMWARE_DIR)"
 	cp "$(BIN)" "$(ECAT_FIRMWARE_DIR)/st_lan9252.bin"
+
+# Copy the application to the Raspberry Pi using SSH/SCP.
+.PHONY: deploy_ssh
+deploy_ssh: bin
+	ssh "$(DEPLOY_HOST)" 'mkdir -p "$(REMOTE_FIRMWARE_DIR)"'
+	scp "$(BIN)" "$(DEPLOY_HOST):$(REMOTE_FIRMWARE_DIR)/st_lan9252.bin"
+	ssh "$(DEPLOY_HOST)" 'sha256sum "$(REMOTE_FIRMWARE_DIR)/st_lan9252.bin"'
 
 # Flash via stlink-tools (st-flash)
 .PHONY: flash

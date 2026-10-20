@@ -22,8 +22,8 @@ Visual Studio Code, STM32CubeIDE, and command-line builds.
 ├── Drivers/                       # STM32 HAL and CMSIS
 ├── external/
 │   ├── soes/                      # EtherCAT stack submodule
-│   └── uc_test/                   # Application and CAN code submodule
-├── scripts/can_rtr_test.sh         # Linux CAN RTR test helper
+│   └── uc_test/                   # Application, CAN code, and shared helpers
+│       └── scripts/               # Linux CAN setup and RTR test scripts
 ├── .vscode/                       # VS Code build and debug configuration
 ├── .project / .cproject           # STM32CubeIDE project metadata
 ├── stm32f446-nucleo-soes.ioc    # CubeMX board configuration
@@ -142,21 +142,41 @@ make bin             # Build and verify that stm32f446-nucleo-soes.bin was gener
 make size            # Build and print the ELF section sizes
 make flash           # Build and program the BIN at 0x08020000 with st-flash
 make flash-openocd   # Build and program the ELF with OpenOCD
-make deploy          # Copy the BIN to the local EtherCAT master firmware path
+make deploy          # Build and copy the BIN to the local EtherCAT master
+make deploy_ssh      # Build and copy the BIN to the Raspberry Pi over SSH
 make clean           # Remove the complete build directory
 ```
 
-By default, `make deploy` copies the firmware to:
+`make deploy` copies the binary locally to:
 
 ```text
 ~/.ecat_master/firmware/st_lan9252.bin
 ```
 
-Override the destination when necessary:
+Override the local directory with:
 
 ```sh
 make deploy ECAT_FIRMWARE_DIR=/path/to/firmware
 ```
+
+`make deploy_ssh` copies the binary to the Raspberry Pi:
+
+```text
+embedded@rpi4:/home/embedded/.ecat_master/firmware/st_lan9252.bin
+```
+
+The remote directory must be writable by `embedded`. The target creates it if
+needed, copies the binary using SCP, and prints the remote file's SHA-256
+checksum. SSH authentication must be configured; sudo is not required.
+Override the SSH host or remote directory with:
+
+```sh
+make deploy_ssh DEPLOY_HOST=embedded@rpi4 \
+    REMOTE_FIRMWARE_DIR=/home/embedded/.ecat_master/firmware
+```
+
+Both targets build the Debug binary before copying it. They do not initiate
+a FoE transfer or flash the microcontroller.
 
 ## Visual Studio Code setup
 
@@ -273,7 +293,7 @@ The corresponding bootloader is
 [bl-stm32f446](../bl-stm32f446).
 
 Board configuration is stored in `stm32f446-nucleo-soes.ioc`.
-The `scripts/can_rtr_test.sh` helper sends CAN RTR requests from Linux using
+The `external/uc_test/scripts/can_rtr_test.sh` helper sends CAN RTR requests from Linux using
 `can-utils`; run it with `--help` for usage.
 
 ## Nucleo hardware configuration
@@ -314,9 +334,14 @@ On a Linux host with SocketCAN, configure `can0` and request the simulated ADC
 readings using the executable scripts:
 
 ```sh
-./scripts/setup_can0.sh
-./scripts/can_rtr_test.sh can0 test
+./external/uc_test/scripts/setup_can0.sh
+./external/uc_test/scripts/can_rtr_test.sh can0 test
 ```
 
 `setup_can0.sh` requests sudo privileges, sets the bitrate to 250000 bit/s,
 and brings the existing interface up. The RTR test requires `can-utils`.
+
+The CAN helpers are maintained in `external/uc_test/scripts/` and shared across
+firmware projects; see its `README.md` for load testing and monitoring commands.
+The `uc_test` tracking branch is `stm32f4xx`; the parent repository pins its exact
+commit. Update the scripts in that submodule rather than making local copies.
